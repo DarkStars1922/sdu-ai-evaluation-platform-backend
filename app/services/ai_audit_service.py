@@ -256,14 +256,18 @@ def _build_consistency_check(
         payload = item["payload"]
         if analysis and analysis.status == "completed":
             any_completed = True
+        all_pages = _all_payload_pages(payload)
         selected_pages = _select_applicant_pages(payload, applicant)
+        title_pages = _select_title_pages(payload, application, award)
         selected_page_indexes = [page["page_index"] for page in selected_pages]
+        title_page_indexes = [page["page_index"] for page in title_pages]
         if selected_page_indexes:
             located_applicant_page = True
         applicant_page_indexes_by_file[item["file_id"]] = selected_page_indexes
 
-        content_pages = selected_pages or _all_payload_pages(payload)
+        content_pages = _dedupe_pages(selected_pages + title_pages) or all_pages
         content_page_index_set = {page["page_index"] for page in content_pages}
+        file_page_index_set = {page["page_index"] for page in all_pages}
         if content_pages:
             for page in content_pages:
                 page_text = page["text"]
@@ -275,8 +279,15 @@ def _build_consistency_check(
                 for level in _extract_levels(page_text, document_title):
                     if level not in recognized_levels:
                         recognized_levels.append(level)
-            seal_detected = seal_detected or _page_item_detected(payload.get("seal", {}), content_page_index_set)
-            signature_detected = signature_detected or _page_item_detected(payload.get("signature", {}), content_page_index_set)
+            for page in all_pages:
+                for level in _extract_levels(page["text"]):
+                    if level not in recognized_levels:
+                        recognized_levels.append(level)
+                if page["text"]:
+                    ocr_texts.append(page["text"])
+            evidence_page_index_set = file_page_index_set or content_page_index_set
+            seal_detected = seal_detected or _page_item_detected(payload.get("seal", {}), evidence_page_index_set)
+            signature_detected = signature_detected or _page_item_detected(payload.get("signature", {}), evidence_page_index_set)
         else:
             document_title = payload.get("document_title")
             if document_title:
@@ -296,6 +307,7 @@ def _build_consistency_check(
                 "matched": filename_similarity >= 0.62,
                 "similarity": filename_similarity,
                 "matched_page_indexes": selected_page_indexes,
+                "matched_title_page_indexes": title_page_indexes,
             }
         )
 
@@ -412,6 +424,65 @@ def _select_applicant_pages(payload: dict, applicant: User | None) -> list[dict]
             }
         )
     return selected
+
+
+def _select_title_pages(payload: dict, application: Application, award: AwardDict | None) -> list[dict]:
+    pages = payload.get("pages") or []
+    if not isinstance(pages, list):
+        return []
+    expected_texts = [
+        application.title,
+        application.description,
+        award.award_name if award else None,
+    ]
+    rule = find_award_rule(application.award_uid)
+    if rule:
+        expected_texts.extend([rule.get("rule_name"), rule.get("rule_path")])
+    candidates = [
+        normalized
+        for value in expected_texts
+        if isinstance(value, str) and len(normalized := _normalize_text(value)) >= 4
+    ]
+    if not candidates:
+        return []
+
+    selected = []
+    for fallback_index, page in enumerate(pages):
+        if not isinstance(page, dict):
+            continue
+        page_text = _page_text(page)
+        normalized_page_text = _normalize_text(page_text)
+        if any(candidate in normalized_page_text for candidate in candidates):
+            selected.append({"page_index": _page_index(page, fallback_index), "text": page_text})
+            continue
+        lines = [line.get("text") or "" for line in page.get("lines", []) if isinstance(line, dict)]
+        if any(_line_matches_expected_title(line, candidates) for line in lines):
+            selected.append({"page_index": _page_index(page, fallback_index), "text": page_text})
+    return selected
+
+
+def _line_matches_expected_title(line: str, normalized_candidates: list[str]) -> bool:
+    normalized_line = _normalize_text(line)
+    if len(normalized_line) < 4:
+        return False
+    return any(
+        normalized_line in candidate
+        or candidate in normalized_line
+        or _text_similarity(normalized_line, candidate) >= 0.72
+        for candidate in normalized_candidates
+    )
+
+
+def _dedupe_pages(pages: list[dict]) -> list[dict]:
+    result = []
+    seen = set()
+    for page in pages:
+        page_index = page.get("page_index")
+        if page_index in seen:
+            continue
+        seen.add(page_index)
+        result.append(page)
+    return result
 
 
 def _all_payload_pages(payload: dict) -> list[dict]:

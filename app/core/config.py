@@ -101,6 +101,14 @@ class Settings(BaseSettings):
     teacher_analysis_llm_timeout_seconds: float = 120.0
     teacher_analysis_llm_temperature: float = 0.35
     teacher_analysis_llm_max_tokens: int = 1800
+    auto_fill_llm_api_url: str | None = None
+    auto_fill_llm_api_key: str | None = None
+    auto_fill_llm_model: str | None = None
+    auto_fill_llm_timeout_seconds: float = 120.0
+    auto_fill_llm_temperature: float = 0.1
+    auto_fill_llm_max_tokens: int = 1800
+    auto_fill_job_ttl_seconds: int = 1800
+    auto_fill_job_prefix: str = "auto_fill:job:"
 
     @property
     def upload_dir_path(self) -> Path:

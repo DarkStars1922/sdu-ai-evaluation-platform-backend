@@ -30,6 +30,10 @@ def enqueue_file_analysis(file_id: str, uploader_id: int | None = None) -> None:
     run_file_analysis_task.delay(file_id, uploader_id)
 
 
+def enqueue_auto_fill_job(job_id: str, user_id: int, file_ids: list[str]) -> None:
+    run_auto_fill_task.delay(job_id, user_id, file_ids)
+
+
 def enqueue_email_job(email_id: int) -> None:
     send_email_task.delay(email_id)
 
@@ -56,6 +60,14 @@ def run_file_analysis_task(file_id: str, uploader_id: int | None = None) -> None
             return
         uploader = db.get(User, uploader_id) if uploader_id else None
         analyze_file(db, file, uploader=uploader)
+
+
+@celery_app.task(name="app.tasks.jobs.run_auto_fill_task")
+def run_auto_fill_task(job_id: str, user_id: int, file_ids: list[str]) -> None:
+    from app.services.auto_fill_service import run_auto_fill_job
+
+    with Session(get_engine()) as db:
+        run_auto_fill_job(db, job_id, user_id, file_ids)
 
 
 @celery_app.task(name="app.tasks.jobs.send_email_task")

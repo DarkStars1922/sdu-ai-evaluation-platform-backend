@@ -10,7 +10,7 @@ from app.core.constants import (
     TEACHER_RECHECKABLE_STATUSES,
 )
 from app.core.term_utils import apply_datetime_term_filter
-from app.core.utils import utcnow
+from app.core.utils import json_loads, utcnow
 from app.models.application import Application
 from app.models.review_record import ReviewRecord
 from app.models.user import User
@@ -92,6 +92,7 @@ def list_teacher_applications(
                 "status": application.status,
                 "score": application.item_score,
                 "comment": application.comment,
+                "tags": _application_tags(application),
                 "created_at": application.created_at.isoformat(),
                 "updated_at": application.updated_at.isoformat(),
             }
@@ -376,3 +377,10 @@ def _query_students_for_statistics(db: Session, *, grade: int | None, class_id: 
 def _require_teacher(user: User) -> None:
     if user.role not in MANAGE_REVIEW_ROLES:
         raise ServiceError("permission denied", 1003)
+
+
+def _application_tags(application: Application) -> list[str]:
+    tags = json_loads(getattr(application, "tags_json", None), [])
+    if not isinstance(tags, list):
+        return []
+    return [str(tag) for tag in tags if str(tag).strip()]

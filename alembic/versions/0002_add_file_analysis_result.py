@@ -7,6 +7,7 @@ Create Date: 2026-04-09 11:40:00
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import mysql
 
 
 # revision identifiers, used by Alembic.
@@ -28,8 +29,8 @@ def upgrade() -> None:
         sa.Column("file_id", sa.String(length=128), nullable=False),
         sa.Column("provider", sa.String(length=50), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("ocr_text", sa.Text(), nullable=True),
-        sa.Column("analysis_json", sa.Text(), nullable=False),
+        sa.Column("ocr_text", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("analysis_json", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),

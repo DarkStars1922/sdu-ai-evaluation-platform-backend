@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects import mysql
 from sqlmodel import Field, SQLModel
 
 
@@ -13,8 +14,8 @@ class FileAnalysisResult(SQLModel, table=True):
     )
     provider: str = Field(sa_column=Column(String(50), nullable=False, default="paddleocr"))
     status: str = Field(sa_column=Column(String(20), nullable=False, default="queued", index=True))
-    ocr_text: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    analysis_json: str = Field(sa_column=Column(Text, nullable=False, default="{}"))
+    ocr_text: str | None = Field(default=None, sa_column=Column(Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True))
+    analysis_json: str = Field(sa_column=Column(Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False, default="{}"))
     error_message: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

@@ -5,7 +5,8 @@ from app.core.database import get_db
 from app.core.responses import error_response, success_response
 from app.dependencies.auth import get_current_user, require_valid_access_token
 from app.models.user import User
-from app.schemas.application import ApplicationCreateRequest, ApplicationUpdateRequest
+from app.schemas.application import AutoFillConfirmRequest, AutoFillJobCreateRequest, ApplicationCreateRequest, ApplicationUpdateRequest
+from app.services.auto_fill_service import cancel_auto_fill_job, confirm_auto_fill_job, create_auto_fill_job, get_auto_fill_job
 from app.services.application_service import (
     create_application,
     get_application_detail,
@@ -109,6 +110,63 @@ def by_category_api(
     except ServiceError as exc:
         return error_response(request=request, code=exc.code, message=exc.message)
     return success_response(request=request, message="获取成功", data=data)
+
+
+@router.post("/auto-fill/jobs")
+def create_auto_fill_job_api(
+    request: Request,
+    payload: AutoFillJobCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        data = create_auto_fill_job(db, user, payload)
+    except ServiceError as exc:
+        return error_response(request=request, code=exc.code, message=exc.message)
+    return success_response(request=request, message="自动填报任务已创建", data=data)
+
+
+@router.get("/auto-fill/jobs/{job_id}")
+def get_auto_fill_job_api(
+    request: Request,
+    job_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        data = get_auto_fill_job(db, user, job_id)
+    except ServiceError as exc:
+        return error_response(request=request, code=exc.code, message=exc.message)
+    return success_response(request=request, message="获取成功", data=data)
+
+
+@router.delete("/auto-fill/jobs/{job_id}")
+def cancel_auto_fill_job_api(
+    request: Request,
+    job_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        cancel_auto_fill_job(db, user, job_id)
+    except ServiceError as exc:
+        return error_response(request=request, code=exc.code, message=exc.message)
+    return success_response(request=request, message="已取消", data={})
+
+
+@router.post("/auto-fill/jobs/{job_id}/confirm")
+def confirm_auto_fill_job_api(
+    request: Request,
+    job_id: str,
+    payload: AutoFillConfirmRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        data = confirm_auto_fill_job(db, user, job_id, payload)
+    except ServiceError as exc:
+        return error_response(request=request, code=exc.code, message=exc.message)
+    return success_response(request=request, message="自动填报已提交", data=data)
 
 
 @router.get("/{application_id}")

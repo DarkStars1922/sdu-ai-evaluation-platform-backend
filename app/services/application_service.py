@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.constants import EDITABLE_APPLICATION_STATUSES, REVIEWER_REVIEWABLE_STATUSES, ROLE_STUDENT
 from app.core.score_rules import SCORE_RULE_VERSION, is_valid_score_category
 from app.core.term_utils import apply_datetime_term_filter
-from app.core.utils import utcnow
+from app.core.utils import json_dumps, utcnow
 from app.models.ai_audit_report import AIAuditReport
 from app.models.application import Application
 from app.models.application_attachment import ApplicationAttachment
@@ -27,11 +27,18 @@ def list_categories() -> list[dict]:
     return load_award_tree()
 
 
-def create_application(db: Session, user: User, payload: ApplicationCreateRequest) -> dict:
+def create_application(
+    db: Session,
+    user: User,
+    payload: ApplicationCreateRequest,
+    *,
+    tags: list[str] | None = None,
+) -> dict:
     _require_student(user)
     _validate_score_category(payload.category, payload.sub_type)
     award = _get_award(db, payload.award_uid)
     item_score = _resolve_score(payload.score, award.max_score, award.score)
+    clean_tags = _normalize_application_tags(tags)
 
     application = Application(
         applicant_id=user.id,
@@ -45,6 +52,7 @@ def create_application(db: Session, user: User, payload: ApplicationCreateReques
         item_score=item_score,
         total_score=item_score,
         score_rule_version=SCORE_RULE_VERSION,
+        tags_json=json_dumps(clean_tags),
         updated_at=utcnow(),
     )
     db.add(application)
@@ -70,6 +78,7 @@ def create_application(db: Session, user: User, payload: ApplicationCreateReques
         "total_score": application.total_score,
         "score_rule_version": application.score_rule_version,
         "award_uid": application.award_uid,
+        "tags": clean_tags,
         "created_at": application.created_at.isoformat(),
     }
 
@@ -361,6 +370,15 @@ def _resolve_score(score: float | None, max_score: float, default_score: float) 
 def _validate_score_category(category: str, sub_type: str) -> None:
     if not is_valid_score_category(category, sub_type):
         raise ServiceError("invalid category/sub_type", 1001)
+
+
+def _normalize_application_tags(tags: list[str] | None) -> list[str]:
+    normalized = []
+    for tag in tags or []:
+        value = str(tag or "").strip()
+        if value and value not in normalized:
+            normalized.append(value)
+    return normalized[:8]
 
 
 def _require_student(user: User) -> None:

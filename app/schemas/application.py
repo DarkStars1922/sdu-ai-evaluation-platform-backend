@@ -34,3 +34,11 @@ class ApplicationCreateRequest(BaseModel):
 
 class ApplicationUpdateRequest(ApplicationCreateRequest):
     version: int | None = Field(default=None, ge=1)
+
+
+class AutoFillJobCreateRequest(BaseModel):
+    attachments: list[AttachmentPayload] = Field(min_length=1, max_length=12)
+
+
+class AutoFillConfirmRequest(ApplicationCreateRequest):
+    pass

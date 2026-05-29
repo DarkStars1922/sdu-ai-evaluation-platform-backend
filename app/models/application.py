@@ -26,6 +26,7 @@ class Application(SQLModel, table=True):
     )
     comment: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     score_rule_version: str | None = Field(default=None, sa_column=Column(String(32), nullable=True))
+    tags_json: str = Field(default="[]", sa_column=Column(Text, nullable=False, default="[]"))
     version: int = Field(default=1, sa_column=Column(Integer, nullable=False, default=1))
     is_deleted: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, default=False, index=True))
     created_at: datetime = Field(

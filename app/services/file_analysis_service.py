@@ -59,7 +59,7 @@ SUMMARY_HINTS = (
 )
 BORDER_NOISE_HINTS = ("研究会", "协会", "委员会", "组委会", "教育研究会", "教育研")
 COMMON_CHINESE_SURNAMES = "赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜谢邹喻柏水窦章云苏潘葛奚范彭郎鲁韦昌马苗凤花方俞任袁柳鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝邬安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田胡凌霍虞万支柯昝管卢莫经房裘缪干解应宗丁宣邓郁单杭洪包诸左石崔吉龚程邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储靳汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘斜厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲台从鄂索咸籍赖卓蔺屠蒙池乔阴胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍璩桑桂濮牛寿通边扈燕冀浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧利师巩聂关荆司马欧阳上官夏侯诸葛闻人东方赫连皇甫尉迟公羊澹台公冶宗政濮阳淳于单于太叔申屠公孙仲孙轩辕令狐钟离宇文长孙慕容鲜于闾丘司徒司空"
-FILE_ANALYSIS_VERSION = "paddleocr_pdf_render_v3"
+FILE_ANALYSIS_VERSION = "paddleocr_pdf_render_v4"
 
 
 def analyze_file(db: Session, file: FileInfo, *, uploader: User | None = None, force: bool = False) -> FileAnalysisResult:
@@ -84,6 +84,7 @@ def analyze_file(db: Session, file: FileInfo, *, uploader: User | None = None, f
 
     try:
         raw_result = run_document_ocr(Path(file.storage_path))
+        raw_result = _normalize_raw_ocr_result(raw_result)
         summary = _build_summary(file=file, uploader=uploader, raw_result=raw_result)
         record.status = "completed"
         record.ocr_text = raw_result["ocr_text"] or None
@@ -108,6 +109,33 @@ def analyze_file(db: Session, file: FileInfo, *, uploader: User | None = None, f
     db.commit()
     db.refresh(record)
     return record
+
+
+def _normalize_raw_ocr_result(raw_result: dict) -> dict:
+    pages = raw_result.get("ocr_pages") or []
+    normalized_pages = []
+    for page in pages:
+        normalized_lines = []
+        for line in page.get("lines") or []:
+            if not isinstance(line, dict):
+                continue
+            normalized_line = dict(line)
+            normalized_line["text"] = _repair_common_ocr_text(normalized_line.get("text") or "")
+            normalized_lines.append(normalized_line)
+        normalized_page = dict(page)
+        normalized_page["lines"] = normalized_lines
+        normalized_page["text"] = "\n".join(item["text"] for item in normalized_lines if item.get("text")).strip()
+        normalized_pages.append(normalized_page)
+    normalized = dict(raw_result)
+    normalized["ocr_pages"] = normalized_pages
+    normalized["ocr_text"] = "\n".join(page["text"] for page in normalized_pages if page.get("text")).strip()
+    return normalized
+
+
+def _repair_common_ocr_text(text: str) -> str:
+    value = str(text or "")
+    value = re.sub(r"(?<!\d)2(\d{2})(?=年\d{1,2}月)", r"20\1", value)
+    return value
 
 
 def get_file_analysis_record(db: Session, file_id: str) -> FileAnalysisResult | None:

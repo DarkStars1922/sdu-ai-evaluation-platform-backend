@@ -57,6 +57,9 @@ def serialize_application(
     include_detail: bool = False,
 ) -> dict:
     award_rule = serialize_award_rule(application.award_uid)
+    tags = json_loads(getattr(application, "tags_json", None), [])
+    if not isinstance(tags, list):
+        tags = []
     payload = {
         "application_id": application.id,
         "id": application.id,
@@ -71,6 +74,7 @@ def serialize_application(
         "item_score": application.item_score,
         "total_score": application.total_score,
         "comment": application.comment,
+        "tags": [str(tag) for tag in tags if str(tag).strip()],
         "version": application.version,
         "created_at": application.created_at.isoformat(),
         "updated_at": application.updated_at.isoformat(),
